@@ -20,7 +20,8 @@ def _normalize_url(url: str) -> str:
 
 _engine_url = _normalize_url(DATABASE_URL)
 _connect_args = {"check_same_thread": False} if _engine_url.startswith("sqlite") else {}
-engine = create_engine(_engine_url, connect_args=_connect_args)
+# pre_ping fängt von Neon serverseitig geschlossene Idle-Connections ab, statt mit ihnen zu crashen
+engine = create_engine(_engine_url, connect_args=_connect_args, pool_pre_ping=True, pool_recycle=300)
 
 
 def init_db() -> None:
