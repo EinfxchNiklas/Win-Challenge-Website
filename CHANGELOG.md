@@ -5,6 +5,8 @@
 ### Zugriff & Sicherheit
 - Zugriff über ein gemeinsames Passwort, geschützt durch ein signiertes Session-Cookie (itsdangerous).
 - Zeitkonstanter Passwortvergleich gegen Timing-Angriffe.
+- Rate-Limiting auf `/login`: nach 5 Fehlversuchen wird eine IP für 5 Minuten gesperrt (Brute-Force-Schutz).
+- Security-Header (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) auf allen Antworten.
 - `Origin`-Prüfung beim WebSocket-Handshake gegen Cross-Site WebSocket Hijacking.
 - Konfigurierbares `Secure`-Cookie-Flag (`COOKIE_SECURE`) für den Betrieb hinter HTTPS.
 - Warnung in den Server-Logs, falls Passwort/Secret-Key noch auf dem Standardwert stehen.

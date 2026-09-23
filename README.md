@@ -70,5 +70,11 @@ Mal startet (`init_db()` in `app/main.py`).
   Login-Cookie.
 - `.env` niemals committen (ist bereits in `.gitignore`).
 - Nach einem Passwort-/Secret-Wechsel müssen sich alle Nutzer neu einloggen.
+- Der Login ist gegen Brute-Force geschützt: nach 5 Fehlversuchen wird eine IP
+  für 5 Minuten gesperrt (429-Antwort).
+- Security-Header (`X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`) werden auf allen Antworten gesetzt.
+- Die Datenbank ist nie öffentlich erreichbar – Zugangsdaten liegen nur in
+  Umgebungsvariablen und werden nie an den Browser ausgeliefert.
 - Der WebSocket prüft den `Origin`-Header gegen den aufgerufenen Host, um
   Cross-Site WebSocket Hijacking zu verhindern.

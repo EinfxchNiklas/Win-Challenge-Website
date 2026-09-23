@@ -15,7 +15,10 @@ from app.auth import (
     USES_DEFAULT_SECRETS,
     check_password,
     create_session_token,
+    is_login_rate_limited,
     is_valid_session_token,
+    record_failed_login,
+    reset_login_attempts,
 )
 from app.db import get_session, init_db
 from app.models import Game
@@ -53,6 +56,15 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @app.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
@@ -60,13 +72,23 @@ def login_page(request: Request):
 
 @app.post("/login")
 def login_submit(request: Request, password: str = Form(...)):
+    client_ip = request.client.host if request.client else "unknown"
+    if is_login_rate_limited(client_ip):
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Zu viele Fehlversuche. Bitte kurz warten und erneut versuchen."},
+            status_code=429,
+        )
     if not check_password(password):
+        record_failed_login(client_ip)
         return templates.TemplateResponse(
             request=request,
             name="login.html",
             context={"error": "Falsches Passwort"},
             status_code=401,
         )
+    reset_login_attempts(client_ip)
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         COOKIE_NAME,
