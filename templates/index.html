@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Win Challenge</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app__header">
+      <h1>Win Challenge</h1>
+      <form action="/logout" method="post">
+        <button type="submit" class="btn btn--ghost">Abmelden</button>
+      </form>
+    </header>
+
+    <form id="add-form" class="add-form">
+      <select id="game-mode">
+        <option value="total">Gesamt-Siege</option>
+        <option value="streak">Siege am Stück</option>
+      </select>
+      <input type="text" id="game-name" placeholder="Spielname" required autocomplete="off" />
+      <input type="number" id="game-target" placeholder="Ziel-Siege" min="1" required />
+      <button type="submit" class="btn">Hinzufügen</button>
+    </form>
+
+    <div id="game-list" class="game-list"></div>
+
+    <p id="status" class="status"></p>
+  </div>
+
+  <template id="game-card-template">
+    <div class="card">
+      <div class="card__drag" draggable="true" title="Ziehen zum Sortieren">⠿</div>
+      <div class="card__main">
+        <div class="card__title-row">
+          <input class="card__name" type="text" />
+          <span class="card__badge">Serie</span>
+        </div>
+        <div class="card__progress">
+          <div class="card__progress-bar"></div>
+        </div>
+        <div class="card__meta">
+          <span class="card__count"></span>
+          <span class="card__sep">/</span>
+          <input class="card__target" type="number" min="1" />
+          <span class="card__mode-label"></span>
+        </div>
+      </div>
+      <div class="card__actions">
+        <button class="btn btn--icon" data-action="decrement" title="-1 Sieg">−</button>
+        <button class="btn btn--icon" data-action="increment" title="+1 Sieg">+</button>
+        <button class="btn btn--icon btn--danger" data-action="delete" title="Löschen">🗑</button>
+      </div>
+    </div>
+  </template>
+
+  <div id="confirm-overlay" class="modal-overlay" hidden>
+    <div class="modal" role="alertdialog" aria-modal="true">
+      <p id="confirm-message" class="modal__message"></p>
+      <div class="modal__actions">
+        <button id="confirm-cancel" type="button" class="btn btn--ghost">Abbrechen</button>
+        <button id="confirm-accept" type="button" class="btn btn--danger-solid">Bestätigen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.__INITIAL_GAMES__ = {{ games | tojson }};
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

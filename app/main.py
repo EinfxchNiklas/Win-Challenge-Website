@@ -1,0 +1,200 @@
+﻿import logging
+from pathlib import Path
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from sqlmodel import select
+
+from app.auth import (
+    COOKIE_MAX_AGE,
+    COOKIE_NAME,
+    COOKIE_SECURE,
+    USES_DEFAULT_SECRETS,
+    check_password,
+    create_session_token,
+    is_valid_session_token,
+)
+from app.db import get_session, init_db
+from app.models import Game
+from app.ws import manager
+
+logger = logging.getLogger("winchallenge")
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+app = FastAPI(title="Win Challenge")
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+# Pfade, die ohne gÃ¼ltige Session erreichbar sein mÃ¼ssen
+PUBLIC_PATHS = {"/login", "/favicon.ico"}
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    init_db()
+    if USES_DEFAULT_SECRETS:
+        logger.warning(
+            "APP_PASSWORD und/oder SECRET_KEY verwenden noch den Standardwert! "
+            "Vor der Veroeffentlichung unbedingt in der .env bzw. den Umgebungsvariablen aendern."
+        )
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static") or path in PUBLIC_PATHS:
+        return await call_next(request)
+    if not is_valid_session_token(request.cookies.get(COOKIE_NAME)):
+        return RedirectResponse(url="/login")
+    return await call_next(request)
+
+
+@app.get("/login")
+def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
+
+
+@app.post("/login")
+def login_submit(request: Request, password: str = Form(...)):
+    if not check_password(password):
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"error": "Falsches Passwort"},
+            status_code=401,
+        )
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(
+        COOKIE_NAME,
+        create_session_token(),
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+    )
+    return response
+
+
+@app.post("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(COOKIE_NAME)
+    return response
+
+
+@app.get("/")
+def index(request: Request):
+    with get_session() as session:
+        games = session.exec(select(Game).order_by(Game.position, Game.created_at)).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"games": [g.to_dict() for g in games]},
+    )
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    if not _is_same_origin(websocket) or not is_valid_session_token(websocket.cookies.get(COOKIE_NAME)):
+        await websocket.close(code=4401)
+        return
+
+    await manager.connect(websocket)
+    await _broadcast_state()
+    try:
+        while True:
+            try:
+                data = await websocket.receive_json()
+            except WebSocketDisconnect:
+                break
+            except ValueError:
+                logger.warning("Ungültige WebSocket-Nachricht ignoriert")
+                continue
+            await _handle_action(data)
+    finally:
+        manager.disconnect(websocket)
+
+
+def _is_same_origin(websocket: WebSocket) -> bool:
+    # Verhindert Cross-Site WebSocket Hijacking: Origin muss zum aufgerufenen Host passen
+    origin = websocket.headers.get("origin")
+    host = websocket.headers.get("host")
+    if not origin or not host:
+        return False
+    return urlparse(origin).netloc == host
+
+
+async def _handle_action(data: dict) -> None:
+    action = data.get("action")
+    try:
+        with get_session() as session:
+            if action == "add":
+                name = (data.get("name") or "").strip()
+                target = int(data.get("target") or 0)
+                mode = data.get("mode") if data.get("mode") in ("total", "streak") else "total"
+                if name and target > 0:
+                    existing = session.exec(select(Game)).all()
+                    next_position = max((g.position for g in existing), default=-1) + 1
+                    session.add(
+                        Game(
+                            name=name,
+                            target_wins=target,
+                            current_wins=0,
+                            position=next_position,
+                            mode=mode,
+                        )
+                    )
+                    session.commit()
+            elif action == "increment":
+                game = session.get(Game, data.get("id"))
+                if game:
+                    game.current_wins += 1
+                    session.add(game)
+                    session.commit()
+            elif action == "decrement":
+                game = session.get(Game, data.get("id"))
+                if game:
+                    if game.mode == "streak":
+                        game.current_wins = 0  # Niederlage bricht die Serie
+                    elif game.current_wins > 0:
+                        game.current_wins -= 1
+                    session.add(game)
+                    session.commit()
+            elif action == "update":
+                game = session.get(Game, data.get("id"))
+                if game:
+                    name = (data.get("name") or "").strip()
+                    target = data.get("target")
+                    if name:
+                        game.name = name
+                    if target:
+                        game.target_wins = max(1, int(target))
+                    session.add(game)
+                    session.commit()
+            elif action == "delete":
+                game = session.get(Game, data.get("id"))
+                if game:
+                    session.delete(game)
+                    session.commit()
+            elif action == "reorder":
+                order = data.get("order") or []
+                for index, game_id in enumerate(order):
+                    game = session.get(Game, game_id)
+                    if game:
+                        game.position = index
+                        session.add(game)
+                session.commit()
+    except Exception:
+        logger.exception("Fehler beim Verarbeiten der WebSocket-Aktion %r", action)
+    await _broadcast_state()
+
+
+async def _broadcast_state() -> None:
+    with get_session() as session:
+        games = session.exec(select(Game).order_by(Game.position, Game.created_at)).all()
+    await manager.broadcast({"type": "state", "games": [g.to_dict() for g in games]})
+

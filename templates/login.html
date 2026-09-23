@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anmelden – Win Challenge</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="login-body">
+  <form class="login-card" method="post" action="/login">
+    <h1>Win Challenge</h1>
+    <p class="login-card__subtitle">Bitte Passwort eingeben</p>
+    {% if error %}
+    <p class="login-card__error">{{ error }}</p>
+    {% endif %}
+    <input type="password" name="password" placeholder="Passwort" required autofocus />
+    <button type="submit" class="btn">Anmelden</button>
+  </form>
+</body>
+</html>
