@@ -2,7 +2,7 @@
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Form, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -68,6 +68,12 @@ async def security_headers_middleware(request: Request, call_next):
 @app.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
+
+
+@app.head("/login")
+def login_page_head() -> Response:
+    # Uptime-Monitore (z.B. UptimeRobot Free) pingen /login per HEAD an
+    return Response(status_code=200)
 
 
 @app.post("/login")
