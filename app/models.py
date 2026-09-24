@@ -26,3 +26,11 @@ class Game(SQLModel, table=True):
             "mode": self.mode,
             "completed": self.completed,
         }
+
+
+class TimerState(SQLModel, table=True):
+    # Singleton-Zeile (id=1): haelt den gemeinsamen Timer-Zustand ueber alle Sitzungen und Neustarts hinweg
+    id: Optional[int] = Field(default=1, primary_key=True)
+    running: bool = Field(default=False)
+    accumulated_seconds: float = Field(default=0.0)
+    started_at: Optional[datetime] = Field(default=None)

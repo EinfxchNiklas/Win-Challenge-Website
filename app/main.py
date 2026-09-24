@@ -1,4 +1,5 @@
 ﻿import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -6,7 +7,7 @@ from fastapi import FastAPI, Form, Request, Response, WebSocket, WebSocketDiscon
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.auth import (
     COOKIE_MAX_AGE,
@@ -21,7 +22,7 @@ from app.auth import (
     reset_login_attempts,
 )
 from app.db import get_session, init_db
-from app.models import Game
+from app.models import Game, TimerState
 from app.ws import manager
 
 logger = logging.getLogger("winchallenge")
@@ -118,11 +119,29 @@ def logout():
 def index(request: Request):
     with get_session() as session:
         games = session.exec(select(Game).order_by(Game.position, Game.created_at)).all()
+        timer = _timer_snapshot(session)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"games": [g.to_dict() for g in games]},
+        context={"games": [g.to_dict() for g in games], "timer": timer},
     )
+
+
+def _timer_snapshot(session: Session) -> dict:
+    timer = session.get(TimerState, 1)
+    if timer is None:
+        timer = TimerState(id=1)
+        session.add(timer)
+        session.commit()
+        session.refresh(timer)
+    now = datetime.now(timezone.utc)
+    elapsed = timer.accumulated_seconds
+    if timer.running and timer.started_at:
+        started_at = timer.started_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        elapsed += (now - started_at).total_seconds()
+    return {"running": timer.running, "elapsed_seconds": elapsed, "server_now": now.isoformat()}
 
 
 @app.websocket("/ws")
@@ -216,6 +235,33 @@ async def _handle_action(data: dict) -> None:
                         game.position = index
                         session.add(game)
                 session.commit()
+            elif action == "timer_toggle":
+                timer = session.get(TimerState, 1)
+                if timer is None:
+                    timer = TimerState(id=1)
+                now = datetime.now(timezone.utc)
+                if timer.running:
+                    started_at = timer.started_at
+                    if started_at:
+                        if started_at.tzinfo is None:
+                            started_at = started_at.replace(tzinfo=timezone.utc)
+                        timer.accumulated_seconds += (now - started_at).total_seconds()
+                    timer.running = False
+                    timer.started_at = None
+                else:
+                    timer.running = True
+                    timer.started_at = now
+                session.add(timer)
+                session.commit()
+            elif action == "timer_reset":
+                timer = session.get(TimerState, 1)
+                if timer is None:
+                    timer = TimerState(id=1)
+                timer.running = False
+                timer.accumulated_seconds = 0.0
+                timer.started_at = None
+                session.add(timer)
+                session.commit()
     except Exception:
         logger.exception("Fehler beim Verarbeiten der WebSocket-Aktion %r", action)
     await _broadcast_state()
@@ -224,5 +270,6 @@ async def _handle_action(data: dict) -> None:
 async def _broadcast_state() -> None:
     with get_session() as session:
         games = session.exec(select(Game).order_by(Game.position, Game.created_at)).all()
-    await manager.broadcast({"type": "state", "games": [g.to_dict() for g in games]})
+        timer = _timer_snapshot(session)
+    await manager.broadcast({"type": "state", "games": [g.to_dict() for g in games], "timer": timer})
 

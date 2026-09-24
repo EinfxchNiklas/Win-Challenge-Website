@@ -9,6 +9,11 @@ const confirmOverlay = document.getElementById("confirm-overlay");
 const confirmMessage = document.getElementById("confirm-message");
 const confirmCancelBtn = document.getElementById("confirm-cancel");
 const confirmAcceptBtn = document.getElementById("confirm-accept");
+const inputSection = document.getElementById("input-section");
+const inputToggleBtn = document.getElementById("input-toggle");
+const timerDisplay = document.getElementById("timer-display");
+const timerToggleBtn = document.getElementById("timer-toggle");
+const timerResetBtn = document.getElementById("timer-reset");
 let resolveConfirm = null;
 
 function showConfirm(message) {
@@ -56,6 +61,7 @@ function connect() {
     const payload = JSON.parse(event.data);
     if (payload.type === "state") {
       renderGames(payload.games);
+      if (payload.timer) applyTimerState(payload.timer);
     }
   });
 
@@ -229,3 +235,62 @@ addForm.addEventListener("submit", (event) => {
 
 renderGames(window.__INITIAL_GAMES__ || []);
 connect();
+
+// Eingabe-Spalte einklappen: Zustand wird lokal je Browser gemerkt
+const INPUT_COLLAPSE_KEY = "winchallenge-input-collapsed";
+
+function setInputCollapsed(collapsed) {
+  inputSection.classList.toggle("input-section--collapsed", collapsed);
+  inputToggleBtn.textContent = collapsed ? "Ausklappen" : "Einklappen";
+  localStorage.setItem(INPUT_COLLAPSE_KEY, collapsed ? "1" : "0");
+}
+
+inputToggleBtn.addEventListener("click", () => {
+  setInputCollapsed(!inputSection.classList.contains("input-section--collapsed"));
+});
+
+setInputCollapsed(localStorage.getItem(INPUT_COLLAPSE_KEY) === "1");
+
+// Timer: Zustand kommt vom Server und bleibt so über alle Sitzungen und Neustarts hinweg gleich
+let timerRunning = false;
+let timerBaseElapsed = 0;
+let timerSyncClientTime = Date.now();
+
+function formatDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(secs)}`;
+}
+
+function currentTimerElapsed() {
+  if (!timerRunning) return timerBaseElapsed;
+  return timerBaseElapsed + (Date.now() - timerSyncClientTime) / 1000;
+}
+
+function updateTimerDisplay() {
+  timerDisplay.textContent = formatDuration(currentTimerElapsed());
+}
+
+function applyTimerState(timer) {
+  timerRunning = Boolean(timer.running);
+  timerBaseElapsed = timer.elapsed_seconds || 0;
+  timerSyncClientTime = Date.now();
+  timerToggleBtn.textContent = timerRunning ? "⏸" : "▶";
+  updateTimerDisplay();
+}
+
+timerToggleBtn.addEventListener("click", () => {
+  send({ action: "timer_toggle" });
+});
+
+timerResetBtn.addEventListener("click", async () => {
+  if (await showConfirm("Timer wirklich zurücksetzen?")) {
+    send({ action: "timer_reset" });
+  }
+});
+
+applyTimerState(window.__INITIAL_TIMER__ || { running: false, elapsed_seconds: 0 });
+setInterval(updateTimerDisplay, 250);
