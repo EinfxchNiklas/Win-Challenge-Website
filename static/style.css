@@ -95,11 +95,64 @@ body {
   color: white;
 }
 
+.btn--small {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.input-section {
+  margin-bottom: 1.75rem;
+}
+
+.input-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.input-section__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.input-section--collapsed .add-form {
+  display: none;
+}
+
+.input-section--collapsed .input-section__title {
+  display: none;
+}
+
+.input-section--collapsed .input-section__header {
+  margin-bottom: 0;
+  justify-content: flex-end;
+}
+
 .add-form {
   display: flex;
   gap: 0.75rem;
   margin-bottom: 1.75rem;
   flex-wrap: wrap;
+}
+
+.timer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.timer-bar__display {
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .add-form input {

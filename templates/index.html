@@ -15,15 +15,27 @@
       </form>
     </header>
 
-    <form id="add-form" class="add-form">
-      <select id="game-mode">
-        <option value="total">Gesamt-Siege</option>
-        <option value="streak">Siege am Stück</option>
-      </select>
-      <input type="text" id="game-name" placeholder="Spielname" required autocomplete="off" />
-      <input type="number" id="game-target" placeholder="Ziel-Siege" min="1" required />
-      <button type="submit" class="btn">Hinzufügen</button>
-    </form>
+    <div class="input-section" id="input-section">
+      <div class="input-section__header">
+        <span class="input-section__title">Neues Spiel hinzufügen</span>
+        <button type="button" id="input-toggle" class="btn btn--ghost btn--small">Einklappen</button>
+      </div>
+      <form id="add-form" class="add-form">
+        <select id="game-mode">
+          <option value="total">Gesamt-Siege</option>
+          <option value="streak">Siege am Stück</option>
+        </select>
+        <input type="text" id="game-name" placeholder="Spielname" required autocomplete="off" />
+        <input type="number" id="game-target" placeholder="Ziel-Siege" min="1" required />
+        <button type="submit" class="btn">Hinzufügen</button>
+      </form>
+    </div>
+
+    <div class="timer-bar">
+      <button type="button" id="timer-toggle" class="btn btn--icon" title="Timer starten/pausieren">▶</button>
+      <span id="timer-display" class="timer-bar__display">00:00:00</span>
+      <button type="button" id="timer-reset" class="btn btn--icon btn--danger" title="Timer zurücksetzen">↺</button>
+    </div>
 
     <div id="game-list" class="game-list"></div>
 
@@ -68,6 +80,7 @@
 
   <script>
     window.__INITIAL_GAMES__ = {{ games | tojson }};
+    window.__INITIAL_TIMER__ = {{ timer | tojson }};
   </script>
   <script src="/static/app.js"></script>
 </body>
