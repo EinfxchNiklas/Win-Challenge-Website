@@ -2,6 +2,7 @@ import os
 import secrets
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Optional
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -9,7 +10,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 APP_PASSWORD = os.getenv("APP_PASSWORD", "changeme")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
 COOKIE_NAME = "session"
-COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 Tage
+COOKIE_MAX_AGE = 60 * 60 * 8  # 8 Stunden
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 USES_DEFAULT_SECRETS = APP_PASSWORD == "changeme" or SECRET_KEY == "dev-secret-change-me"
 
@@ -34,6 +35,17 @@ def is_valid_session_token(token: Optional[str]) -> bool:
     except (BadSignature, SignatureExpired):
         return False
     return bool(data.get("authenticated"))
+
+
+def session_token_remaining_seconds(token: Optional[str]) -> float:
+    if not token:
+        return 0
+    try:
+        _, issued_at = _serializer.loads(token, max_age=COOKIE_MAX_AGE, return_timestamp=True)
+    except (BadSignature, SignatureExpired):
+        return 0
+    elapsed = (datetime.now(timezone.utc) - issued_at).total_seconds()
+    return max(0, COOKIE_MAX_AGE - elapsed)
 
 
 def check_password(password: str) -> bool:

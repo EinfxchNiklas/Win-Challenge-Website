@@ -1,4 +1,5 @@
-﻿import logging
+﻿import asyncio
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -20,6 +21,7 @@ from app.auth import (
     is_valid_session_token,
     record_failed_login,
     reset_login_attempts,
+    session_token_remaining_seconds,
 )
 from app.db import get_session, init_db
 from app.models import Game, TimerState
@@ -150,13 +152,25 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=4401)
         return
 
+    remaining_session_seconds = session_token_remaining_seconds(websocket.cookies.get(COOKIE_NAME))
+    if remaining_session_seconds <= 0:
+        await websocket.close(code=4401)
+        return
     await manager.connect(websocket)
     await _broadcast_state()
+    expires_at = asyncio.get_running_loop().time() + remaining_session_seconds
     try:
         while True:
             try:
-                data = await websocket.receive_json()
+                remaining = expires_at - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    await websocket.close(code=4401)
+                    break
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=remaining)
             except WebSocketDisconnect:
+                break
+            except asyncio.TimeoutError:
+                await websocket.close(code=4401)
                 break
             except ValueError:
                 logger.warning("Ungültige WebSocket-Nachricht ignoriert")

@@ -65,7 +65,11 @@ function connect() {
     }
   });
 
-  socket.addEventListener("close", () => {
+  socket.addEventListener("close", (event) => {
+    if (event.code === 4401) {
+      window.location.assign("/login");
+      return;
+    }
     setStatus("Verbindung verloren – verbinde erneut …", true);
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);

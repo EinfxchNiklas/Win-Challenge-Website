@@ -70,6 +70,8 @@ Mal startet (`init_db()` in `app/main.py`).
   Login-Cookie.
 - `.env` niemals committen (ist bereits in `.gitignore`).
 - Nach einem Passwort-/Secret-Wechsel müssen sich alle Nutzer neu einloggen.
+- Sitzungen laufen 8 Stunden nach der Anmeldung ab. Auch eine dann noch offene
+   WebSocket-Verbindung wird beendet und die Seite zum Login zurückgeleitet.
 - Der Login ist gegen Brute-Force geschützt: nach 5 Fehlversuchen wird eine IP
   für 5 Minuten gesperrt (429-Antwort).
 - Security-Header (`X-Content-Type-Options`, `X-Frame-Options`,
